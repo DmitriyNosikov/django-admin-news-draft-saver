@@ -263,14 +263,32 @@
   }
 
   async function restoreDraftIfNeeded() {
+    console.log('Восстанавливаем черновик формы, если он нужен ...');
+
     const draftKey = getDraftKey();
     const raw = localStorage.getItem(draftKey);
     const draft = raw ? safeJsonParse(raw) : null;
-    if (!draft || !draft.fields) return;
+
+    if (!draft || !draft.fields) {
+      console.log('Черновик формы не найден.');
+
+      return;
+    }
 
     // Восстанавливаем только если был сабмит и сервер вернул ошибки.
-    if (!draft.pendingSubmit) return;
-    if (!hasServerErrors()) return;
+    if (!draft.pendingSubmit) {
+      console.log('Черновик формы не был сохранен. Восстановление не требуется.');
+
+      return;
+    };
+
+    if (!hasServerErrors()) {
+      console.log('Нет ошибок при отправке формы. Восстановление не требуется.');
+
+      return;
+    }
+
+    console.log('Восстанавливаем значения полей формы ...');
 
     setTextValue('id_title', draft.fields.title);
     setTextValue('id_slug', draft.fields.slug);
@@ -314,6 +332,8 @@
         if (input) setFilesOnInput(input, [f]);
       }
     }
+
+    console.log('Черновик формы восстановлен.');
   }
 
   async function ensureGalleryRows(count) {
@@ -334,6 +354,8 @@
   }
 
   function installSubmitListener() {
+    console.log('Устанавливаем слушатель на событие submit формы ...');
+
     const form = document.getElementById(FORM_ID);
 
     if (!form) return;
@@ -348,9 +370,13 @@
       },
       { capture: true }
     );
+
+    console.log('Слушатель на событие submit формы установлен.');
   }
 
   function createDropZone() {
+    console.log('Добавляем зону Drag’n’Drop в блок "Галерея" ...');
+
     const galleryGroup = document.getElementById(GALLERY_GROUP_ID);
 
     if (!galleryGroup) return null;
@@ -479,6 +505,8 @@
       subtree: true
     });
 
+    console.log('Зона Drag’n’Drop в блоке "Галерея" добавлена.');
+
     return container;
   }
 
@@ -517,20 +545,23 @@
   async function main() {
     if (!isTargetPage()) return;
 
+    console.log('Инициализация расширения Django Admin News Draft Saver ...');
+
     installSubmitListener();
     createDropZone();
 
     // Сначала пробуем восстановить сразу; CKEditor может проинициализироваться позже — сделаем повтор.
     await restoreDraftIfNeeded();
 
-    const ck = window.CKEDITOR;
+    const ckEditor = window.CKEDITOR;
 
-    if (ck?.instances?.[CKEDITOR_TEXTAREA_ID] && typeof ck.instances[CKEDITOR_TEXTAREA_ID].on === 'function') {
+    if (ckEditor?.instances?.[CKEDITOR_TEXTAREA_ID] && typeof ckEditor.instances[CKEDITOR_TEXTAREA_ID].on === 'function') {
       // Если CKEditor уже есть, но ещё не готов — восстановим повторно после instanceReady.
       try {
-        ck.instances[CKEDITOR_TEXTAREA_ID].on('instanceReady', () => {
-          restoreDraftIfNeeded().catch(() => { });
-        });
+        ckEditor.instances[CKEDITOR_TEXTAREA_ID]
+          .on('instanceReady', () => {
+            restoreDraftIfNeeded().catch(() => { });
+          });
       } catch { }
     } else {
       // Если CKEditor загрузится после document_idle — пробуем восстановить ещё раз с задержкой.
@@ -538,6 +569,8 @@
     }
 
     markSubmitSuccessAndCleanup();
+
+    console.log('Расширение Django Admin News Draft Saver инициализировано.');
   }
 
   main().catch(() => { });
