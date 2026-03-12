@@ -112,6 +112,21 @@
     return document.querySelector(`#${GALLERY_GROUP_ID} .add-row a`);
   }
 
+  /** Возвращает количество полей «Картинка» в блоке галереи (без шаблонов). */
+  function getGalleryFieldsCount() {
+    const inputsCount = getGalleryFileInputs().length;
+
+    return inputsCount;
+  }
+
+  /** Обновляет текст счётчика «Добавлено» в dropzone по текущему количеству полей галереи. */
+  function updateDropZoneAddedFilesCounter(filesCounterEl) {
+    if (!filesCounterEl) return;
+
+    const n = getGalleryFieldsCount();
+    filesCounterEl.textContent = n ? `Добавлено: ${n}` : '';
+  }
+
   function setFilesOnInput(input, files) {
     if (!input) return;
 
@@ -338,7 +353,7 @@
     title.style.marginBottom = '6px';
 
     const hint = document.createElement('div');
-    hint.textContent = 'Перетащите несколько изображений сюда или выберите файлы. Для каждого файла будет добавлена строка в таблицу «Галерея».';
+    hint.innerText = `Перетащите несколько изображений сюда или выберите файлы.\nКаждый файл будет добавлен в блок "Картинка" отдельным полем.`;
     hint.style.fontSize = '12px';
     hint.style.opacity = '0.85';
     hint.style.marginBottom = '10px';
@@ -347,6 +362,7 @@
     input.type = 'file';
     input.accept = 'image/*';
     input.multiple = true;
+    input.style.display = 'none';
 
     const buttonRow = document.createElement('div');
     buttonRow.style.display = 'flex';
@@ -359,13 +375,13 @@
     button.className = 'button';
     button.addEventListener('click', () => input.click());
 
-    const stat = document.createElement('span');
-    stat.style.fontSize = '12px';
-    stat.style.opacity = '0.85';
-    stat.textContent = '';
+    const filesCounter = document.createElement('span');
+    filesCounter.style.fontSize = '12px';
+    filesCounter.style.opacity = '0.85';
+    filesCounter.textContent = '';
 
     buttonRow.appendChild(button);
-    buttonRow.appendChild(stat);
+    buttonRow.appendChild(filesCounter);
 
     container.appendChild(title);
     container.appendChild(hint);
@@ -398,11 +414,11 @@
 
       if (!files.length) return;
 
-      stat.textContent = `Загружаю: ${files.length}`;
+      filesCounter.textContent = `Загружаю: ${files.length}`;
 
       await addFilesToGallery(files);
 
-      stat.textContent = `Добавлено: ${files.length}`;
+      updateDropZoneAddedFilesCounter(filesCounter);
     });
 
     input.addEventListener('change', async () => {
@@ -411,11 +427,11 @@
 
       if (!files.length) return;
 
-      stat.textContent = `Загружаю: ${files.length}`;
+      filesCounter.textContent = `Загружаю: ${files.length}`;
 
       await addFilesToGallery(files);
 
-      stat.textContent = `Добавлено: ${files.length}`;
+      updateDropZoneAddedFilesCounter(filesCounter);
 
       input.value = '';
     });
@@ -429,6 +445,13 @@
       group.prepend(container);
     }
 
+    // Начальное значение счётчика (если уже есть строки)
+    updateDropZoneAddedFilesCounter(filesCounter);
+
+    // При добавлении/удалении строк в блоке «Картинка» пересчитываем «Добавлено»
+    const observer = new MutationObserver(() => updateDropZoneAddedFilesCounter(filesCounter));
+    observer.observe(group, { childList: true, subtree: true });
+    ы
     return container;
   }
 
