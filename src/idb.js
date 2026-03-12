@@ -8,7 +8,9 @@
   const STORE_BLOBS = 'blobs';
 
   function openDb() {
-    console.log(`Устанавливаем соединение с базой данных ${DB_NAME} версия ${DB_VERSION} ...`);
+    const loggerPrefix = '[OPEN DB]';
+
+    console.log(`${loggerPrefix} Устанавливаем соединение с базой данных ${DB_NAME} версия ${DB_VERSION} ...`);
 
     return new Promise((resolve, reject) => {
       const openRequest = indexedDB.open(DB_NAME, DB_VERSION);
@@ -17,7 +19,7 @@
 
       // При необходимости создаём или обновляем структуру базы данных
       openRequest.onupgradeneeded = () => {
-        console.log(`Обновляем структуру базы данных ${DB_NAME} версия ${DB_VERSION} ...`);
+        console.log(`${loggerPrefix} Обновляем структуру базы данных ${DB_NAME} версия ${DB_VERSION} ...`);
 
         const db = openRequest.result;
         const existingStoreList = db.objectStoreNames;
@@ -26,26 +28,26 @@
           // Создаем хранилище объектов с ключом 'key'
           db.createObjectStore(STORE_BLOBS, { keyPath: 'key' });
 
-          console.log(`Создаем хранилище объектов с ключом 'key' ${STORE_BLOBS} ...`);
+          console.log(`${loggerPrefix} Создаем хранилище объектов с ключом 'key' ${STORE_BLOBS} ...`);
         }
 
-        console.log(`Структура базы данных ${DB_NAME} версия ${DB_VERSION} обновлена.`);
+        console.log(`${loggerPrefix} Структура базы данных ${DB_NAME} версия ${DB_VERSION} обновлена.`);
       };
 
       // Успешное открытие базы данных
       openRequest.onsuccess = () => {
-        console.log(`Соединение с базой данных ${DB_NAME} версия ${DB_VERSION} установлено.`);
+        console.log(`${loggerPrefix} Соединение с базой данных ${DB_NAME} версия ${DB_VERSION} установлено.`);
 
         resolve(openRequest.result);
       }
 
       // Изменение версии базы данных
       openRequest.onversionchange = () => {
-        console.log(`База данных ${DB_NAME} версия ${DB_VERSION} устарела. Соединение закрывается ...`);
+        console.log(`${loggerPrefix} База данных ${DB_NAME} версия ${DB_VERSION} устарела. Соединение закрывается ...`);
 
         openRequest.close();
 
-        const errorMessage = `База данных ${DB_NAME} устарела. Соединение закрыто. Пожалуйста, перезагрузите страницу.`;
+        const errorMessage = `${loggerPrefix} База данных ${DB_NAME} устарела. Соединение закрыто. Пожалуйста, перезагрузите страницу.`;
 
         alert(errorMessage);
 
@@ -55,7 +57,9 @@
   }
 
   function withStore(mode, callback) {
-    console.log(`Выполняем операцию с хранилищем ${STORE_BLOBS} в режиме ${mode} ...`);
+    const loggerPrefix = '[STORE OPERATION]';
+
+    console.log(`${loggerPrefix} Выполняем операцию с хранилищем ${STORE_BLOBS} в режиме ${mode} ...`);
 
     return openDb()
       .then(
@@ -68,19 +72,19 @@
               .then(() => callback(store));
 
             transaction.oncomplete = () => {
-              console.log(`Операция с хранилищем ${STORE_BLOBS} в режиме ${mode} завершена.`);
+              console.log(`${loggerPrefix} Операция с хранилищем ${STORE_BLOBS} в режиме ${mode} завершена.`);
 
               resolve(resultPromise);
             };
 
             transaction.onerror = () => {
-              console.log(`Транзакция выполнена с ошибкой.`);
+              console.log(`${loggerPrefix} Транзакция выполнена с ошибкой.`);
 
               reject(transaction.error);
             }
 
             transaction.onabort = () => {
-              console.log(`Транзакция отменена.`);
+              console.log(`${loggerPrefix} Транзакция отменена.`);
 
               reject(transaction.error);
             }
@@ -88,72 +92,108 @@
       );
   }
 
-  async function putBlob(key, fileOrBlob) {
-    console.log(`Сохраняем файл ${key} ...`);
+  /**
+   * Читает File/Blob в ArrayBuffer через FileReader.
+   * Так мы явно сохраняем байты файла, а не ссылку — восстановление работает надёжно.
+   */
+  function readAsArrayBuffer(fileOrBlob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-    const value =
-      fileOrBlob instanceof File
-        ? {
-          key,
-          blob: fileOrBlob,
-          name: fileOrBlob.name,
-          type: fileOrBlob.type,
-          lastModified: fileOrBlob.lastModified
-        }
-        : {
-          key,
-          blob: fileOrBlob,
-          name: 'blob',
-          type: fileOrBlob.type || ''
-        };
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(fileOrBlob);
+    });
+  }
+
+  async function putBlob(key, fileOrBlob) {
+    const loggerPrefix = '[SAVE BLOB]';
+
+    const name = fileOrBlob instanceof File ? fileOrBlob.name : 'blob';
+    const type = fileOrBlob.type || '';
+    const lastModified = fileOrBlob instanceof File ? fileOrBlob.lastModified : Date.now();
+
+    console.log(`${loggerPrefix} Сохраняем файл ${name} (читаем содержимое) ...`);
+
+    const buffer = await readAsArrayBuffer(fileOrBlob);
+
+    const fileData = {
+      key,
+      buffer,
+      name,
+      type,
+      lastModified
+    };
 
     await withStore('readwrite', (store) => {
-      const putRequest = store.put(value);
+      const putRequest = store.put(fileData);
 
       putRequest.onerror = () => {
-        console.log(`Ошибка при сохранении файла ${key}:`, putRequest.error);
+        console.log(`${loggerPrefix} Ошибка при сохранении файла ${name}:`, putRequest.error);
       };
 
       putRequest.onsuccess = () => {
-        console.log(`Файл ${key} сохранен.`);
+        console.log(`${loggerPrefix} Файл ${name} сохранен.`);
       };
     });
   }
 
   async function getBlob(key) {
-    console.log(`Получаем файл ${key} ...`);
+    const loggerPrefix = '[GET BLOB]';
 
-    return await withStore('readonly', (store) => {
+    console.log(`${loggerPrefix} Получаем файл по ключу ${key} ...`);
+
+    const row = await withStore('readonly', (store) => {
       return new Promise((resolve, reject) => {
         const req = store.get(key);
 
         req.onerror = () => {
-          console.log(`Ошибка при получении файла ${key}:`, req.error);
-
+          console.log(`${loggerPrefix} Ошибка при получении файла по ключу ${key}:`, req.error);
           reject(req.error);
         };
 
         req.onsuccess = () => {
           resolve(req.result || null);
 
-          console.log(`Файл ${key} получен.`);
+          if (req.result) {
+            console.log(`${loggerPrefix} Файл ${req.result.name} получен.`);
+          }
         };
       });
     });
+
+    if (!row) return null;
+
+    // Новый формат: храним ArrayBuffer, собираем Blob
+    if (row.buffer) {
+      return {
+        blob: new Blob([row.buffer], { type: row.type || '' }),
+        name: row.name || 'file',
+        type: row.type || '',
+        lastModified: row.lastModified ?? Date.now()
+      };
+    }
+
+    // Старый формат: в хранилище лежал blob/File (обратная совместимость)
+    return row;
   }
 
   async function deleteBlob(key) {
-    console.log(`Удаляем файл ${key} ...`);
+    const loggerPrefix = '[DELETE BLOB]';
+
+    console.log(`${loggerPrefix} Удаляем файл по ключу${key} ...`);
 
     await withStore('readwrite', (store) => {
       store.delete(key);
 
-      console.log(`Файл ${key} удален.`);
+      console.log(`${loggerPrefix} Файл по ключу ${key} успешно удален.`);
     });
   }
 
   async function deleteByPrefix(prefix) {
-    console.log(`Удаляем файлы с префиксом ${prefix} ...`);
+    const loggerPrefix = '[DELETE BY PREFIX]';
+
+    console.log(`${loggerPrefix} Удаляем файлы с префиксом ${prefix} ...`);
 
     await withStore('readwrite', (store) => {
       return new Promise((resolve, reject) => {
@@ -175,7 +215,7 @@
             cursor.delete();
           }
 
-          console.log(`Файл ${cursorKey} удален.`);
+          console.log(`${loggerPrefix} Файл ${cursorKey} удален.`);
 
           cursor.continue();
         };

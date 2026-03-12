@@ -101,7 +101,8 @@
 
   function getGalleryFileInputs() {
     // Берём только реальные строки (исключаем шаблоны (template) empty-form с __prefix__)
-    const galleryFileInputs = document.querySelectorAll(`#${GALLERY_GROUP_ID} input[type="file"][id^="id_News_gallery-"][id$="-image_f"]`);
+    const inputsSelector = `#${GALLERY_GROUP_ID} input[type="file"][id^="id_News_gallery-"][id$="-image_f"]`;
+    const galleryFileInputs = document.querySelectorAll(inputsSelector);
     const filteredInputs = Array.from(galleryFileInputs)
       .filter((el) => !el.id.includes('__prefix__'));
 
@@ -159,7 +160,9 @@
 
     const row = await idb.getBlob(key);
 
-    if (!row || !row.blob) return null;
+    if (!row || !row.blob) {
+      return null;
+    }
 
     try {
       const file = new File([row.blob], row.name || 'file', {
@@ -203,6 +206,8 @@
     const mainImageInput = document.getElementById('id_image');
     const mainFile = mainImageInput?.files?.[0] || null;
 
+    console.log('Основное изображение', mainFile);
+
     if (mainFile) {
       const key = `${draftKey}:mainImage`;
 
@@ -222,12 +227,14 @@
     const galleryFiles = [];
 
     for (const input of galleryInputs) {
-      const f = input.files?.[0];
+      const file = input.files?.[0];
 
-      if (!f) continue;
+      if (!file) continue;
 
-      galleryFiles.push(f);
+      galleryFiles.push(file);
     }
+
+    console.log('Изображения галереи', galleryFiles);
 
     // Удаляем старые blob'ы галереи для этого draftKey, чтобы не накапливать мусор
     const idb = window.__newsDraftIdb;
@@ -237,12 +244,19 @@
     draft.files.gallery = [];
 
     for (let i = 0; i < galleryFiles.length; i++) {
-      const f = galleryFiles[i];
+      const file = galleryFiles[i];
       const key = `${draftKey}:gallery:${i}`;
 
-      draft.files.gallery.push({ key, name: f.name, type: f.type, lastModified: f.lastModified });
+      const fileMeta = {
+        key,
+        name: file.name,
+        type: file.type,
+        lastModified: file.lastModified
+      }
 
-      await fileToIdb(key, f);
+      draft.files.gallery.push(fileMeta);
+
+      await fileToIdb(key, file);
     }
 
     localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -269,6 +283,9 @@
     setTextValue('id_date_from_1', draft.fields.date_from_1);
     setTextValue('id_date_to_0', draft.fields.date_to_0);
     setTextValue('id_date_to_1', draft.fields.date_to_1);
+
+    console.log('draft.files.mainImage', draft.files.mainImage);
+    console.log('draft.files.gallery', draft.files.gallery);
 
     // Восстановление главного изображения
     if (draft.files?.mainImage?.key) {
@@ -310,7 +327,7 @@
     while (inputs.length < count) {
       addLink.click();
 
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       inputs = getGalleryFileInputs();
     }
@@ -324,7 +341,7 @@
     // Слушаем в capture-фазе, чтобы сохранить даже если дальше сабмит отменят.
     form.addEventListener(
       'submit',
-      () => {
+      (event) => {
         // Не блокируем сабмит; сохраняем в фоне.
         saveDraftBeforeSubmit()
           .catch(() => { });
@@ -334,10 +351,10 @@
   }
 
   function createDropZone() {
-    const group = document.getElementById(GALLERY_GROUP_ID);
+    const galleryGroup = document.getElementById(GALLERY_GROUP_ID);
 
-    if (!group) return null;
-    if (group.querySelector('[data-news-gallery-dropzone="1"]')) return null;
+    if (!galleryGroup) return null;
+    if (galleryGroup.querySelector('[data-news-gallery-dropzone="1"]')) return null;
 
     const container = document.createElement('div');
     container.setAttribute('data-news-gallery-dropzone', '1');
@@ -389,8 +406,12 @@
     container.appendChild(input);
 
     const setHover = (on) => {
-      container.style.background = on ? 'rgba(59,130,246,0.08)' : 'rgba(2,6,23,0.02)';
-      container.style.borderColor = on ? 'rgba(59,130,246,0.65)' : 'var(--hairline-color, #cbd5e1)';
+      container.style.background = on
+        ? 'rgba(59,130,246,0.08)'
+        : 'rgba(2,6,23,0.02)';
+      container.style.borderColor = on
+        ? 'rgba(59,130,246,0.65)'
+        : 'var(--hairline-color, #cbd5e1)';
     };
 
     container.addEventListener('dragenter', (e) => {
@@ -409,27 +430,29 @@
       e.preventDefault();
       setHover(false);
 
-      const files = Array.from(e.dataTransfer?.files || [])
+      const files = e.dataTransfer?.files || [];
+      const filteredFiles = Array.from(files)
         .filter((f) => f && f.type && f.type.startsWith('image/'));
 
-      if (!files.length) return;
+      if (!filteredFiles.length) return;
 
-      filesCounter.textContent = `Загружаю: ${files.length}`;
+      filesCounter.textContent = `Загружаю: ${filteredFiles.length} ...`;
 
-      await addFilesToGallery(files);
+      await addFilesToGallery(filteredFiles);
 
       updateDropZoneAddedFilesCounter(filesCounter);
     });
 
     input.addEventListener('change', async () => {
-      const files = Array.from(input.files || [])
+      const files = input.files || [];
+      const filteredFiles = Array.from(files)
         .filter((f) => f && f.type && f.type.startsWith('image/'));
 
-      if (!files.length) return;
+      if (!filteredFiles.length) return;
 
-      filesCounter.textContent = `Загружаю: ${files.length}`;
+      filesCounter.textContent = `Загружаю: ${filteredFiles.length}`;
 
-      await addFilesToGallery(files);
+      await addFilesToGallery(filteredFiles);
 
       updateDropZoneAddedFilesCounter(filesCounter);
 
@@ -437,12 +460,12 @@
     });
 
     // Вставляем dropzone над таблицей галереи
-    const fieldset = group.querySelector('fieldset.module');
+    const fieldset = galleryGroup.querySelector('fieldset.module');
 
     if (fieldset) {
       fieldset.insertBefore(container, fieldset.querySelector('table') || null);
     } else {
-      group.prepend(container);
+      galleryGroup.prepend(container);
     }
 
     // Начальное значение счётчика (если уже есть строки)
@@ -450,8 +473,12 @@
 
     // При добавлении/удалении строк в блоке «Картинка» пересчитываем «Добавлено»
     const observer = new MutationObserver(() => updateDropZoneAddedFilesCounter(filesCounter));
-    observer.observe(group, { childList: true, subtree: true });
-    ы
+
+    observer.observe(galleryGroup, {
+      childList: true,
+      subtree: true
+    });
+
     return container;
   }
 
