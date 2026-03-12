@@ -257,14 +257,17 @@
 
     // Восстановление главного изображения
     if (draft.files?.mainImage?.key) {
-      const f = await idbToFile(draft.files.mainImage.key);
+      const mainImageFile = await idbToFile(draft.files.mainImage.key);
       const input = document.getElementById('id_image');
 
-      if (input && f) setFilesOnInput(input, [f]);
+      if (input && mainImageFile) setFilesOnInput(input, [mainImageFile]);
     }
 
     // Восстановление изображений галереи
-    const galleryMeta = Array.isArray(draft.files?.gallery) ? draft.files.gallery : [];
+    const galleryFiles = draft.files?.gallery;
+    const galleryMeta = Array.isArray(galleryFiles)
+      ? galleryFiles
+      : [];
     if (galleryMeta.length) {
       await ensureGalleryRows(galleryMeta.length);
 

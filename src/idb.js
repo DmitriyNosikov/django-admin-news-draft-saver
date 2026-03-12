@@ -68,10 +68,10 @@
               .then(() => callback(store));
 
             transaction.oncomplete = () => {
-              console.log(`Транзакция выполнена успешно.`);
+              console.log(`Операция с хранилищем ${STORE_BLOBS} в режиме ${mode} завершена.`);
 
               resolve(resultPromise);
-            }
+            };
 
             transaction.onerror = () => {
               console.log(`Транзакция выполнена с ошибкой.`);
@@ -84,8 +84,6 @@
 
               reject(transaction.error);
             }
-
-            transaction.oncomplete = () => console.log(`Операция с хранилищем ${STORE_BLOBS} в режиме ${mode} завершена.`);
           })
       );
   }
