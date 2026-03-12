@@ -3,6 +3,15 @@
   const GALLERY_GROUP_ID = 'News_gallery-group';
   const CKEDITOR_TEXTAREA_ID = 'id_text';
 
+  function getCkeditorIframe() {
+    // Django CMS CKEditor 4: iframe с визуальным редактором
+    // title содержит id textarea: "..., id_text"
+    const selector = `iframe.cke_wysiwyg_frame[title*="${CKEDITOR_TEXTAREA_ID}"]`;
+    const iframe = document.querySelector(selector);
+
+    return iframe || null;
+  }
+
   function isTargetPage() {
     const form = document.getElementById(FORM_ID);
 
@@ -67,14 +76,22 @@
 
     if (!ckEditorTextarea) return '';
 
-    // CKEditor WYSIWYG редактор, встроенный в Django
-    const ckEditor = window.CKEDITOR;
-    const ckEditorInstance = ckEditor?.instances?.[CKEDITOR_TEXTAREA_ID];
+    // Пытаемся прочитать HTML напрямую из iframe CKEditor,
+    // чтобы не зависеть от window.CKEDITOR (изолированный мир расширения)
+    const iframe = getCkeditorIframe();
 
-    if (ckEditorInstance && typeof ckEditorInstance.getData === 'function') {
-      return ckEditorInstance.getData() || '';
+    try {
+      const doc = iframe?.contentDocument;
+      const body = doc?.body;
+
+      if (body && typeof body.innerHTML === 'string') {
+        return body.innerHTML || '';
+      }
+    } catch {
+      // На всякий случай игнорируем возможные ошибки доступа к iframe.
     }
 
+    // Fallback — читаем значение скрытого textarea.
     return ckEditorTextarea.value || '';
   }
 
@@ -83,12 +100,19 @@
 
     if (!ckEditorTextarea) return;
 
-    const ckEditor = window.CKEDITOR;
-    const ckEditorInstance = ckEditor?.instances?.[CKEDITOR_TEXTAREA_ID];
+    // Сначала пробуем записать прямо в iframe CKEditor.
+    const iframe = getCkeditorIframe();
 
-    if (ckEditorInstance && typeof ckEditorInstance.setData === 'function') {
-      ckEditorInstance.setData(html ?? '');
-      return;
+    try {
+      const doc = iframe?.contentDocument;
+      const body = doc?.body;
+
+      if (body) {
+        body.innerHTML = html ?? '';
+        return;
+      }
+    } catch {
+      // Если что-то пошло не так — откатываемся к textarea.
     }
 
     const inputEvent = new Event('input', { bubbles: true });
@@ -290,13 +314,17 @@
 
     console.log('Восстанавливаем значения полей формы ...');
 
+    console.log('Содержимое черновика: ', draft.fields);
+
     setTextValue('id_title', draft.fields.title);
     setTextValue('id_slug', draft.fields.slug);
     setTextValue('id_annotation', draft.fields.annotation);
     setCkeditorHtml(draft.fields.textHtml);
+
     if (draft.fields.cropping !== undefined) {
       setTextValue('id_cropping', draft.fields.cropping);
     }
+
     setTextValue('id_date_from_0', draft.fields.date_from_0);
     setTextValue('id_date_from_1', draft.fields.date_from_1);
     setTextValue('id_date_to_0', draft.fields.date_to_0);
