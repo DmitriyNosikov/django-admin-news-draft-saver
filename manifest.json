@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Django Admin News Draft Saver",
   "author": "Dmitriy Nosikov",
-  "version": "0.1.0",
+  "homepage_url": "https://github.com/DmitriyNosikov/django-admin-news-draft-saver",
+  "version": "0.1.3",
   "description": "Автосохранение/восстановление полей формы 'Добавить Новость' и мультизагрузка изображений в галерею.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -18,6 +19,12 @@
       "js": ["src/idb.js", "src/content.js"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "django-admin-news-draft-saver@example.com",
+      "strict_min_version": "109.0"
+    }
+  }
 }
 
