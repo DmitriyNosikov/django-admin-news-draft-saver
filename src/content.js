@@ -42,8 +42,11 @@
 
   function getTextValue(id) {
     const el = document.getElementById(id);
+    const textValue = el && typeof el.value === 'string'
+      ? el.value
+      : '';
 
-    return el && typeof el.value === 'string' ? el.value : '';
+    return textValue;
   }
 
   function setTextValue(id, value) {
@@ -60,48 +63,49 @@
   }
 
   function getCkeditorHtml() {
-    const ta = document.getElementById(CKEDITOR_TEXTAREA_ID);
+    const ckEditorTextarea = document.getElementById(CKEDITOR_TEXTAREA_ID);
 
-    if (!ta) return '';
+    if (!ckEditorTextarea) return '';
 
-    const ck = window.CKEDITOR;
-    const inst = ck?.instances?.[CKEDITOR_TEXTAREA_ID];
+    // CKEditor WYSIWYG редактор, встроенный в Django
+    const ckEditor = window.CKEDITOR;
+    const ckEditorInstance = ckEditor?.instances?.[CKEDITOR_TEXTAREA_ID];
 
-    if (inst && typeof inst.getData === 'function') {
-      return inst.getData() || '';
+    if (ckEditorInstance && typeof ckEditorInstance.getData === 'function') {
+      return ckEditorInstance.getData() || '';
     }
 
-    return ta.value || '';
+    return ckEditorTextarea.value || '';
   }
 
   function setCkeditorHtml(html) {
-    const ta = document.getElementById(CKEDITOR_TEXTAREA_ID);
+    const ckEditorTextarea = document.getElementById(CKEDITOR_TEXTAREA_ID);
 
-    if (!ta) return;
+    if (!ckEditorTextarea) return;
 
-    const ck = window.CKEDITOR;
-    const inst = ck?.instances?.[CKEDITOR_TEXTAREA_ID];
+    const ckEditor = window.CKEDITOR;
+    const ckEditorInstance = ckEditor?.instances?.[CKEDITOR_TEXTAREA_ID];
 
-    if (inst && typeof inst.setData === 'function') {
-      inst.setData(html ?? '');
+    if (ckEditorInstance && typeof ckEditorInstance.setData === 'function') {
+      ckEditorInstance.setData(html ?? '');
       return;
     }
 
     const inputEvent = new Event('input', { bubbles: true });
     const changeEvent = new Event('change', { bubbles: true });
 
-    ta.value = html ?? '';
-    ta.dispatchEvent(inputEvent);
-    ta.dispatchEvent(changeEvent);
+    ckEditorTextarea.value = html ?? '';
+    ckEditorTextarea.dispatchEvent(inputEvent);
+    ckEditorTextarea.dispatchEvent(changeEvent);
   }
 
   function getGalleryFileInputs() {
-    // Берём только реальные строки (исключаем empty-form с __prefix__)
-    return Array.from(
-      document.querySelectorAll(
-        `#${GALLERY_GROUP_ID} input[type="file"][id^="id_News_gallery-"][id$="-image_f"]`
-      )
-    ).filter((el) => !el.id.includes('__prefix__'));
+    // Берём только реальные строки (исключаем шаблоны (template) empty-form с __prefix__)
+    const galleryFileInputs = document.querySelectorAll(`#${GALLERY_GROUP_ID} input[type="file"][id^="id_News_gallery-"][id$="-image_f"]`);
+    const filteredInputs = Array.from(galleryFileInputs)
+      .filter((el) => !el.id.includes('__prefix__'));
+
+    return filteredInputs;
   }
 
   function getGalleryAddRowLink() {
@@ -121,6 +125,10 @@
     input.dispatchEvent(changeEvent);
   }
 
+  /*
+    * window.__newsDraftIdb - глобальный объект с методами,
+    позволяющими работать с подготовленной нами IndexedDB (файл idb.js)
+  */
   async function fileToIdb(key, file) {
     const idb = window.__newsDraftIdb;
 
@@ -164,6 +172,7 @@
         slug: getTextValue('id_slug'),
         annotation: getTextValue('id_annotation'),
         textHtml: getCkeditorHtml(),
+        cropping: getTextValue('id_cropping'),
         date_from_0: getTextValue('id_date_from_0'),
         date_from_1: getTextValue('id_date_from_1'),
         date_to_0: getTextValue('id_date_to_0'),
@@ -182,7 +191,11 @@
     if (mainFile) {
       const key = `${draftKey}:mainImage`;
 
-      draft.files.mainImage = { key, name: mainFile.name, type: mainFile.type, lastModified: mainFile.lastModified };
+      draft.files.mainImage = {
+        key, name: mainFile.name,
+        type: mainFile.type,
+        lastModified: mainFile.lastModified
+      };
 
       await fileToIdb(key, mainFile);
     } else {
@@ -234,6 +247,9 @@
     setTextValue('id_slug', draft.fields.slug);
     setTextValue('id_annotation', draft.fields.annotation);
     setCkeditorHtml(draft.fields.textHtml);
+    if (draft.fields.cropping !== undefined) {
+      setTextValue('id_cropping', draft.fields.cropping);
+    }
     setTextValue('id_date_from_0', draft.fields.date_from_0);
     setTextValue('id_date_from_1', draft.fields.date_from_1);
     setTextValue('id_date_to_0', draft.fields.date_to_0);

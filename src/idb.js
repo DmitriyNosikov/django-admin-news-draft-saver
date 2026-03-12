@@ -67,9 +67,24 @@
               .resolve()
               .then(() => callback(store));
 
-            transaction.oncomplete = () => resolve(resultPromise);
-            transaction.onerror = () => reject(transaction.error);
-            transaction.onabort = () => reject(transaction.error);
+            transaction.oncomplete = () => {
+              console.log(`Транзакция выполнена успешно.`);
+
+              resolve(resultPromise);
+            }
+
+            transaction.onerror = () => {
+              console.log(`Транзакция выполнена с ошибкой.`);
+
+              reject(transaction.error);
+            }
+
+            transaction.onabort = () => {
+              console.log(`Транзакция отменена.`);
+
+              reject(transaction.error);
+            }
+
             transaction.oncomplete = () => console.log(`Операция с хранилищем ${STORE_BLOBS} в режиме ${mode} завершена.`);
           })
       );
@@ -95,9 +110,15 @@
         };
 
     await withStore('readwrite', (store) => {
-      store.put(value);
+      const putRequest = store.put(value);
 
-      console.log(`Файл ${key} сохранен.`);
+      putRequest.onerror = () => {
+        console.log(`Ошибка при сохранении файла ${key}:`, putRequest.error);
+      };
+
+      putRequest.onsuccess = () => {
+        console.log(`Файл ${key} сохранен.`);
+      };
     });
   }
 
@@ -107,7 +128,13 @@
     return await withStore('readonly', (store) => {
       return new Promise((resolve, reject) => {
         const req = store.get(key);
-        req.onerror = () => reject(req.error);
+
+        req.onerror = () => {
+          console.log(`Ошибка при получении файла ${key}:`, req.error);
+
+          reject(req.error);
+        };
+
         req.onsuccess = () => {
           resolve(req.result || null);
 
@@ -132,18 +159,29 @@
 
     await withStore('readwrite', (store) => {
       return new Promise((resolve, reject) => {
+        // Документация: https://learn.javascript.ru/indexeddb#kursory
         const req = store.openCursor();
+
         req.onerror = () => reject(req.error);
+
         req.onsuccess = () => {
           const cursor = req.result;
-          if (!cursor) return resolve();
-          const k = cursor.key;
-          if (typeof k === 'string' && k.startsWith(prefix)) cursor.delete();
+
+          if (!cursor) {
+            return resolve();
+          }
+
+          const cursorKey = cursor.key;
+
+          if (typeof cursorKey === 'string' && cursorKey.startsWith(prefix)) {
+            cursor.delete();
+          }
+
+          console.log(`Файл ${cursorKey} удален.`);
+
           cursor.continue();
         };
       });
-
-      console.log(`Файлы с префиксом ${prefix} удалены.`);
     });
   }
 
